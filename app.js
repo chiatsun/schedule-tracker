@@ -73,11 +73,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const loadSchedules = async () => {
         const overlay = document.getElementById('loading-overlay');
         updateSyncStatus('syncing', '從雲端載入中...');
+        console.log('Attempting to load from:', API_URL);
         
         try {
-            const response = await fetch(API_URL, { cache: 'no-cache' });
+            // Explicitly set cors and follow redirect for cross-domain stability
+            const response = await fetch(API_URL, { 
+                method: 'GET',
+                mode: 'cors',
+                cache: 'no-cache',
+                redirect: 'follow'
+            });
+            
             if (response.ok) {
                 const data = await response.json();
+                console.log('Cloud data received:', data);
                 if (Array.isArray(data)) {
                     schedules = data;
                     localStorage.setItem('schedules', JSON.stringify(schedules));
@@ -85,10 +94,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     updateSyncStatus('success', '已與雲端同步');
                 }
             } else {
-                throw new Error('Cloud error status: ' + response.status);
+                throw new Error(`Server responded with ${response.status}`);
             }
         } catch (err) {
-            console.warn('Cloud load failed, using local data:', err);
+            console.error('Cloud load failed:', err);
             schedules = JSON.parse(localStorage.getItem('schedules')) || [];
             isDataLoaded = true;
             updateSyncStatus('error', '離線模式 (載入失敗)');
