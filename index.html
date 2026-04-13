@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>工程行程追蹤系統</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="flatpickr.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <h1>工程行程追蹤</h1>
+            <p>輕鬆掌握您的專案進度，絕不漏接重要日程</p>
+        </header>
+
+        <main>
+            <section class="form-section glass-panel">
+                <h2>新增專案行程</h2>
+                <form id="schedule-form">
+                    <div class="form-group">
+                        <label for="project-name">專案名稱</label>
+                        <input type="text" id="project-name" required placeholder="例如：新竹廠區 A 棟機電工程...">
+                    </div>
+                    <div class="form-group">
+                        <label for="personnel">施工人員名單</label>
+                        <input type="text" id="personnel" placeholder="例如：王小明、林志明...">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="start-date">開始日期</label>
+                            <input type="date" id="start-date" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="end-date">預計結束日期</label>
+                            <input type="date" id="end-date" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="project-status">工程狀態</label>
+                            <select id="project-status" class="status-select">
+                                <option value="started">開工</option>
+                                <option value="completed">竣工</option>
+                                <option value="extended">展延</option>
+                                <option value="cancelled">取消</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="extended-date-group" style="display: none;">
+                            <label for="extended-date">展延日期</label>
+                            <input type="date" id="extended-date">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-primary">新增行程</button>
+                </form>
+            </section>
+
+            <section class="list-section">
+                <div class="section-header" style="flex-wrap: wrap; gap: 1rem;">
+                    <h2>行程列表</h2>
+                    <div class="stats">
+                        <span class="stat-badge filter-badge active" data-filter="all">全部: <span id="stat-all">0</span></span>
+                        <span class="stat-badge filter-badge ongoing-badge" data-filter="ongoing">進行中: <span id="stat-ongoing">0</span></span>
+                        <span class="stat-badge filter-badge warning-badge" data-filter="warning">即將過期: <span id="stat-warning">0</span></span>
+                        <span class="stat-badge filter-badge danger-badge" data-filter="danger">已過期: <span id="stat-danger">0</span></span>
+                        <span class="stat-badge filter-badge completed-badge" data-filter="completed">已竣工: <span id="stat-completed">0</span></span>
+                        <span class="stat-badge filter-badge cancelled-badge" data-filter="cancelled">已取消: <span id="stat-cancelled">0</span></span>
+                    </div>
+                    <div class="list-actions" style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                        <div style="display: flex; align-items: center; gap: 0.3rem;">
+                            <label for="warning-days" style="margin-bottom: 0; font-size: 0.85rem; color: var(--text-muted);">過期提醒(天):</label>
+                            <input type="number" id="warning-days" min="1" max="365" value="5" class="status-select" style="width: 70px; padding: 0.4rem; height: auto;">
+                        </div>
+                        <select id="sort-select" class="status-select" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; width: auto;">
+                            <option value="end-asc">依結束日期 (由近到遠)</option>
+                            <option value="end-desc">依結束日期 (由遠到近)</option>
+                            <option value="start-asc">依開始日期 (由近到遠)</option>
+                            <option value="start-desc">依開始日期 (由遠到近)</option>
+                            <option value="name-asc">依專案名稱</option>
+                        </select>
+                        <button id="btn-print" class="btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; flex: initial;">列印列表</button>
+                        <button id="btn-export" class="btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; flex: initial;">匯出資料</button>
+                        <button id="btn-import-trigger" class="btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; flex: initial;">匯入資料</button>
+                        <input type="file" id="import-file" accept=".json" style="display: none;">
+                    </div>
+                </div>
+                <div id="schedule-grid" class="schedule-grid">
+                    <!-- Project cards will be injected here -->
+                </div>
+            </section>
+        </main>
+    </div>
+    <!-- Update Modal -->
+    <div id="update-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content glass-panel">
+            <h2>更新工程狀態</h2>
+            <form id="update-form">
+                <input type="hidden" id="update-id">
+                <div class="form-group">
+                    <label for="update-status">工程狀態</label>
+                    <select id="update-status" class="status-select">
+                        <option value="started">開工</option>
+                        <option value="completed">竣工</option>
+                        <option value="extended">展延</option>
+                        <option value="cancelled">取消</option>
+                    </select>
+                </div>
+                <div class="form-group" id="update-extended-date-group" style="display: none;">
+                    <label for="update-extended-date">展延日期</label>
+                    <input type="date" id="update-extended-date">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" id="btn-cancel-update">取消</button>
+                    <button type="submit" class="btn-primary">確認更新</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <script src="flatpickr.min.js"></script>
+    <script src="flatpickr-zh-tw.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
