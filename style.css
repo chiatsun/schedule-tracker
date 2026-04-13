@@ -270,6 +270,53 @@ input:focus {
     margin-bottom: 1rem;
 }
 
+.nav-brand h1 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.nav-sync-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    transition: all 0.3s ease;
+}
+
+.nav-sync-status.syncing {
+    color: var(--status-warning);
+    background: rgba(245, 158, 11, 0.1);
+}
+
+.nav-sync-status.success {
+    color: var(--status-ongoing);
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.nav-sync-status.error {
+    color: var(--status-danger);
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.nav-sync-status .material-symbols-outlined {
+    font-size: 16px;
+}
+
+.nav-sync-status.syncing .material-symbols-outlined {
+    animation: rotate 1.5s linear infinite;
+}
+
+@keyframes rotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
 .card-title {
     font-size: 1.25rem;
     font-weight: 700;

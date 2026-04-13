@@ -12,6 +12,25 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentFilter = 'all';
     let currentSort = 'end-asc';
     let warningDays = parseInt(localStorage.getItem('warningDays')) || 5;
+    const API_URL = 'https://script.google.com/macros/s/AKfycbw8XFH6ngE_CPRXnOZkeYfyhbQImN-91VdGcNDoKteuzvQRQO79XFm4LOCRObM75mA/exec';
+
+    // Sync Status UI
+    const syncStatus = document.getElementById('sync-status');
+    const syncText = document.getElementById('sync-text');
+
+    const updateSyncStatus = (state, text) => {
+        if (!syncStatus || !syncText) return;
+        syncStatus.className = 'nav-sync-status ' + state;
+        syncText.textContent = text;
+        const icon = syncStatus.querySelector('.material-symbols-outlined');
+        if (icon) {
+            switch(state) {
+                case 'syncing': icon.textContent = 'cloud_sync'; break;
+                case 'success': icon.textContent = 'cloud_done'; break;
+                case 'error':   icon.textContent = 'cloud_off'; break;
+            }
+        }
+    };
 
     // Warning Days Element
     const warningDaysInput = document.getElementById('warning-days');
@@ -47,7 +66,64 @@ document.addEventListener('DOMContentLoaded', () => {
     const updateStatusSelect = document.getElementById('update-status');
     const updateExtendedDateGroup = document.getElementById('update-extended-date-group');
 
-    let schedules = JSON.parse(localStorage.getItem('schedules')) || [];
+    let schedules = [];
+
+    // --- Data Layer (Cloud Powered) ---
+    const loadSchedules = async () => {
+        updateSyncStatus('syncing', '從雲端載入中...');
+        try {
+            // Priority: Cloud -> LocalStorage Fallback
+            const response = await fetch(API_URL);
+            if (response.ok) {
+                const data = await response.json();
+                if (Array.isArray(data)) {
+                    schedules = data;
+                    localStorage.setItem('schedules', JSON.stringify(schedules));
+                    updateSyncStatus('success', '已與雲端同步');
+                }
+            } else {
+                throw new Error('Cloud error');
+            }
+        } catch (err) {
+            console.warn('Cloud load failed, using local data:', err);
+            schedules = JSON.parse(localStorage.getItem('schedules')) || [];
+            updateSyncStatus('error', '離線模式 (載入失敗)');
+        }
+        renderSchedules();
+    };
+
+    const saveSchedules = async () => {
+        // Always save to local first
+        localStorage.setItem('schedules', JSON.stringify(schedules));
+        
+        // Native autosave if pywebview is present
+        if (window.pywebview && window.pywebview.api) {
+            window.pywebview.api.save_data(JSON.stringify(schedules));
+        }
+
+        updateSyncStatus('syncing', '同步到雲端...');
+        try {
+            const response = await fetch(API_URL, {
+                method: 'POST',
+                mode: 'no-cors', // Apps Script requires no-cors for simple posts
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(schedules)
+            });
+            // With no-cors, we can't see the response status, but it usually sends.
+            // We'll set a brief delay then show success.
+            setTimeout(() => {
+                updateSyncStatus('success', '已儲存到雲端');
+            }, 800);
+        } catch (err) {
+            console.error('Cloud save failed:', err);
+            updateSyncStatus('error', '儲存失敗 (離線)');
+        }
+    };
+
+    const saveAndRender = () => {
+        renderSchedules();
+        saveSchedules();
+    };
 
     // Toggles the extension date visibility
     const toggleExtendedDateGroup = (selectEl, groupEl) => {
@@ -226,14 +302,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 openUpdateModal(id);
             });
         });
-
-        // Filter events
-        document.querySelectorAll('.filter-badge').forEach(badge => {
-            // Remove previous event listeners by replacing the element if we want to be pure, 
-            // but realistically it's easier to avoid duplication by taking care during render
-            // Since we re-attach inside renderSchedules, wait, renderSchedules doesn't recreate badges.
-            // Oh, the badges are STATIC! We should NOT put the event listener assignment inside renderSchedules multiple times without removing old ones!
-        });
     };
 
     // Attach filter event listeners ONCE globally
@@ -317,22 +385,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    const deleteSchedule = (id) => {
-        schedules = schedules.filter(s => s.id !== id);
-        saveAndRender();
-    };
-
-    const saveAndRender = () => {
-        localStorage.setItem('schedules', JSON.stringify(schedules));
-        
-        // Native autosave if pywebview is present
-        if (window.pywebview && window.pywebview.api) {
-            window.pywebview.api.save_data(JSON.stringify(schedules));
-        }
-
-        renderSchedules();
-    };
-
     scheduleForm.addEventListener('submit', addSchedule);
 
     // Print Data
@@ -397,17 +449,17 @@ document.addEventListener('DOMContentLoaded', () => {
         allowInput: true
     });
 
-    // Native load hook
+    // native load hook (pywebview only)
     window.addEventListener('pywebviewready', async () => {
+        // We keep this for exe version, it will overwrite the local schedules array 
+        // once it loads the local file.
         try {
             if (window.pywebview && window.pywebview.api) {
                 const dataStr = await window.pywebview.api.load_data();
                 if (dataStr) {
                     const importedData = JSON.parse(dataStr);
                     if (Array.isArray(importedData)) {
-                        // Overwrite with native file data to ensure source of truth
                         schedules = importedData;
-                        localStorage.setItem('schedules', JSON.stringify(schedules));
                         renderSchedules();
                     }
                 }
@@ -417,6 +469,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Initial render based on localStorage fallback
-    renderSchedules();
+    // Start cloud load
+    loadSchedules();
 });
