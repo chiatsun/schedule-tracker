@@ -78,14 +78,13 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${date.getFullYear()}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`;
     };
 
-    const APP_VERSION = '2024.04.13.v2'; // 用來確認部署是否成功
+    const APP_VERSION = '2024.04.13.v4'; // 升級版本號
     console.log(`[System] Schedule Tracker Version: ${APP_VERSION}`);
 
     const loadSchedules = async () => {
         const overlay = document.getElementById('loading-overlay');
         updateSyncStatus('syncing', '從雲端載入中...');
         
-        // 加入時間戳參數防止快取
         const cacheBuster = `&t=${Date.now()}`;
         const finalUrl = API_URL.includes('?') ? (API_URL + cacheBuster) : (API_URL + '?t=' + Date.now());
 
@@ -101,16 +100,21 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (response.ok) {
                 let data = await response.json();
-                console.log('Received raw cloud data count:', Array.isArray(data) ? data.length : 0);
+                console.log('Data before scrub:', JSON.stringify(data[0])); // 檢查第一筆的格式
                 
                 if (Array.isArray(data)) {
-                    schedules = data.map(item => ({
-                        ...item,
-                        id: item.id || Date.now().toString() + Math.random().toString(36).substr(2, 5),
-                        startDate: formatDateHelper(item.startDate),
-                        endDate: formatDateHelper(item.endDate),
-                        extendedDate: item.extendedDate ? formatDateHelper(item.extendedDate) : null
-                    }));
+                    schedules = data.map(item => {
+                        const sanitized = {
+                            ...item,
+                            id: item.id || Date.now().toString() + Math.random().toString(36).substr(2, 5),
+                            startDate: formatDateHelper(item.startDate),
+                            endDate: formatDateHelper(item.endDate),
+                            extendedDate: item.extendedDate ? formatDateHelper(item.extendedDate) : null
+                        };
+                        return sanitized;
+                    });
+                    
+                    console.log('Data after scrub:', JSON.stringify(schedules[0]));
                     localStorage.setItem('schedules', JSON.stringify(schedules));
                     isDataLoaded = true;
                     updateSyncStatus('success', '已與雲端同步');
@@ -406,8 +410,14 @@ document.addEventListener('DOMContentLoaded', () => {
         projectStatusSelect.value = 'started';
     };
 
+    const deleteSchedule = (id) => {
+        // 使用 String() 強制轉型，防止 Google Sheets 的數字 ID 與網頁字串 ID 比較失敗
+        schedules = schedules.filter(s => String(s.id) !== String(id));
+        saveAndRender();
+    };
+
     const openUpdateModal = (id) => {
-        const schedule = schedules.find(s => s.id === id);
+        const schedule = schedules.find(s => String(s.id) === String(id));
         if (!schedule) return;
 
         document.getElementById('update-id').value = schedule.id;
@@ -429,7 +439,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const scheduleIndex = schedules.findIndex(s => s.id === id);
+        const scheduleIndex = schedules.findIndex(s => String(s.id) === String(id));
         if (scheduleIndex !== -1) {
             schedules[scheduleIndex].status = status;
             schedules[scheduleIndex].extendedDate = status === 'extended' ? extendedDate : null;
