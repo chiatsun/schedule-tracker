@@ -353,8 +353,12 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        const now = new Date();
+        const saveTime = `${now.getFullYear()}/${(now.getMonth()+1).toString().padStart(2, '0')}/${now.getDate().toString().padStart(2, '0')} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+
         const newSchedule = {
             id: Date.now().toString(),
+            saveTime, // 加入輸入日期時間
             name,
             personnel,
             startDate,
