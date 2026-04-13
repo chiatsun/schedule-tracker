@@ -103,20 +103,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
         updateSyncStatus('syncing', '同步到雲端...');
         try {
+            // Use 'text/plain' to avoid CORS preflight (OPTIONS request) 
+            // which Google Apps Script doesn't support well.
             const response = await fetch(API_URL, {
                 method: 'POST',
-                mode: 'no-cors', // Apps Script requires no-cors for simple posts
-                headers: { 'Content-Type': 'application/json' },
+                mode: 'no-cors', 
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                 body: JSON.stringify(schedules)
             });
-            // With no-cors, we can't see the response status, but it usually sends.
-            // We'll set a brief delay then show success.
+            
+            // Because mode is 'no-cors', we get an opaque response.
+            // We assume success if no exception is thrown.
             setTimeout(() => {
-                updateSyncStatus('success', '已儲存到雲端');
-            }, 800);
+                updateSyncStatus('success', '已同步至雲端');
+            }, 1000);
         } catch (err) {
             console.error('Cloud save failed:', err);
-            updateSyncStatus('error', '儲存失敗 (離線)');
+            updateSyncStatus('error', '雲端儲存失敗');
         }
     };
 
