@@ -78,15 +78,21 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${date.getFullYear()}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`;
     };
 
-    // --- Data Layer (Cloud Powered) ---
+    const APP_VERSION = '2024.04.13.v2'; // 用來確認部署是否成功
+    console.log(`[System] Schedule Tracker Version: ${APP_VERSION}`);
+
     const loadSchedules = async () => {
         const overlay = document.getElementById('loading-overlay');
         updateSyncStatus('syncing', '從雲端載入中...');
-        console.log('Attempting to load from:', API_URL);
+        
+        // 加入時間戳參數防止快取
+        const cacheBuster = `&t=${Date.now()}`;
+        const finalUrl = API_URL.includes('?') ? (API_URL + cacheBuster) : (API_URL + '?t=' + Date.now());
+
+        console.log('Fetching from cloud:', finalUrl);
         
         try {
-            // Explicitly set cors and follow redirect for cross-domain stability
-            const response = await fetch(API_URL, { 
+            const response = await fetch(finalUrl, { 
                 method: 'GET',
                 mode: 'cors',
                 cache: 'no-cache',
@@ -95,8 +101,9 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (response.ok) {
                 let data = await response.json();
+                console.log('Received raw cloud data count:', Array.isArray(data) ? data.length : 0);
+                
                 if (Array.isArray(data)) {
-                    // Sanitize data right after loading
                     schedules = data.map(item => ({
                         ...item,
                         id: item.id || Date.now().toString() + Math.random().toString(36).substr(2, 5),
@@ -118,7 +125,6 @@ document.addEventListener('DOMContentLoaded', () => {
             updateSyncStatus('error', '離線模式 (載入失敗)');
         }
         
-        // 隱藏遮罩
         if (overlay) {
             overlay.style.opacity = '0';
             setTimeout(() => {
