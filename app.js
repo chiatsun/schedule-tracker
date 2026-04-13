@@ -67,44 +67,60 @@ document.addEventListener('DOMContentLoaded', () => {
     const updateExtendedDateGroup = document.getElementById('update-extended-date-group');
 
     let schedules = [];
+    let isDataLoaded = false; // 新增：用來記錄雲端資料是否已經載入成功
 
     // --- Data Layer (Cloud Powered) ---
     const loadSchedules = async () => {
+        const overlay = document.getElementById('loading-overlay');
         updateSyncStatus('syncing', '從雲端載入中...');
+        
         try {
-            // Priority: Cloud -> LocalStorage Fallback
-            const response = await fetch(API_URL);
+            const response = await fetch(API_URL, { cache: 'no-cache' });
             if (response.ok) {
                 const data = await response.json();
                 if (Array.isArray(data)) {
                     schedules = data;
                     localStorage.setItem('schedules', JSON.stringify(schedules));
+                    isDataLoaded = true;
                     updateSyncStatus('success', '已與雲端同步');
                 }
             } else {
-                throw new Error('Cloud error');
+                throw new Error('Cloud error status: ' + response.status);
             }
         } catch (err) {
             console.warn('Cloud load failed, using local data:', err);
             schedules = JSON.parse(localStorage.getItem('schedules')) || [];
+            isDataLoaded = true;
             updateSyncStatus('error', '離線模式 (載入失敗)');
         }
+        
+        // 隱藏遮罩
+        if (overlay) {
+            overlay.style.opacity = '0';
+            setTimeout(() => {
+                overlay.style.display = 'none';
+            }, 500);
+        }
+        
         renderSchedules();
     };
 
     const saveSchedules = async () => {
-        // Always save to local first
+        // 安全機制：如果資料還沒載入完成，絕對不要執行儲存，以免覆蓋雲端
+        if (!isDataLoaded) {
+            console.warn('Data not loaded yet, save aborted to prevent overwrite.');
+            return;
+        }
+
+        // 存到本地
         localStorage.setItem('schedules', JSON.stringify(schedules));
         
-        // Native autosave if pywebview is present
         if (window.pywebview && window.pywebview.api) {
             window.pywebview.api.save_data(JSON.stringify(schedules));
         }
 
         updateSyncStatus('syncing', '同步到雲端...');
         try {
-            // Use 'text/plain' to avoid CORS preflight (OPTIONS request) 
-            // which Google Apps Script doesn't support well.
             const response = await fetch(API_URL, {
                 method: 'POST',
                 mode: 'no-cors', 
@@ -112,8 +128,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify(schedules)
             });
             
-            // Because mode is 'no-cors', we get an opaque response.
-            // We assume success if no exception is thrown.
             setTimeout(() => {
                 updateSyncStatus('success', '已同步至雲端');
             }, 1000);
