@@ -5,13 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>工程行程追蹤系統</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="flatpickr.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="spinner"></div>
+        <p>雲端資料同步中...</p>
+    </div>
     <div class="app-container">
         <header>
-            <h1>工程行程追蹤</h1>
+            <div class="header-main">
+                <h1>工程行程追蹤</h1>
+                <div class="nav-sync-status" id="sync-status">
+                    <span class="material-symbols-outlined">cloud_sync</span>
+                    <span id="sync-text">載入中...</span>
+                </div>
+            </div>
             <p>輕鬆掌握您的專案進度，絕不漏接重要日程</p>
         </header>
 
@@ -117,8 +127,8 @@
             </form>
         </div>
     </div>
-    <script src="flatpickr.min.js"></script>
-    <script src="flatpickr-zh-tw.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/zh-tw.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
