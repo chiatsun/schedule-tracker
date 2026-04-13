@@ -67,7 +67,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const updateExtendedDateGroup = document.getElementById('update-extended-date-group');
 
     let schedules = [];
-    let isDataLoaded = false; // 新增：用來記錄雲端資料是否已經載入成功
+    let isDataLoaded = false; 
+
+    // Helper for date formatting
+    const formatDateHelper = (dateStr) => {
+        if (!dateStr) return '無資料';
+        // Handle ISO strings or Date objects
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return dateStr;
+        return `${date.getFullYear()}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`;
+    };
 
     // --- Data Layer (Cloud Powered) ---
     const loadSchedules = async () => {
@@ -85,10 +94,16 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             
             if (response.ok) {
-                const data = await response.json();
-                console.log('Cloud data received:', data);
+                let data = await response.json();
                 if (Array.isArray(data)) {
-                    schedules = data;
+                    // Sanitize data right after loading
+                    schedules = data.map(item => ({
+                        ...item,
+                        id: item.id || Date.now().toString() + Math.random().toString(36).substr(2, 5),
+                        startDate: formatDateHelper(item.startDate),
+                        endDate: formatDateHelper(item.endDate),
+                        extendedDate: item.extendedDate ? formatDateHelper(item.extendedDate) : null
+                    }));
                     localStorage.setItem('schedules', JSON.stringify(schedules));
                     isDataLoaded = true;
                     updateSyncStatus('success', '已與雲端同步');
@@ -256,6 +271,8 @@ document.addEventListener('DOMContentLoaded', () => {
             schedules.forEach(schedule => {
                 // Compatibility layer for older items
                 if (!schedule.status) schedule.status = 'started';
+                // Ensure ID exists
+                if (!schedule.id) schedule.id = Date.now().toString() + Math.random().toString(36).substr(2, 5);
 
                 const theme = getStatusTheme(schedule);
                 counts[theme]++;
@@ -283,16 +300,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                         <div class="date-item">
                             <span class="date-label">開始日期</span>
-                            <span class="date-value">${schedule.startDate}</span>
+                            <span class="date-value">${formatDateHelper(schedule.startDate)}</span>
                         </div>
                         <div class="date-item">
                             <span class="date-label">結束日期</span>
-                            <span class="date-value">${schedule.endDate}</span>
+                            <span class="date-value">${formatDateHelper(schedule.endDate)}</span>
                         </div>
                         ${schedule.status === 'extended' ? `
                         <div class="date-item">
                             <span class="date-label" style="color: var(--status-warning);">展延日期</span>
-                            <span class="date-value" style="color: var(--status-warning);">${schedule.extendedDate}</span>
+                            <span class="date-value" style="color: var(--status-warning);">${formatDateHelper(schedule.extendedDate)}</span>
                         </div>
                         ` : ''}
                     </div>
