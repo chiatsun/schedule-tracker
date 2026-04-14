@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     const scheduleForm = document.getElementById('schedule-form');
     const scheduleGrid = document.getElementById('schedule-grid');
-    
+
     const statOngoing = document.getElementById('stat-ongoing');
     const statWarning = document.getElementById('stat-warning');
     const statDanger = document.getElementById('stat-danger');
@@ -12,7 +12,15 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentFilter = 'all';
     let currentSort = 'end-asc';
     let warningDays = parseInt(localStorage.getItem('warningDays')) || 5;
+    let personnelList = JSON.parse(localStorage.getItem('personnelList')) || [];
     const API_URL = 'https://script.google.com/macros/s/AKfycbw8XFH6ngE_CPRXnOZkeYfyhbQImN-91VdGcNDoKteuzvQRQO79XFm4LOCRObM75mA/exec';
+    const SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/d/1nPYrS9e3qvHTLsjzNIotcZlWwKtWsxha8cy3gQ5ZkAA/edit?gid=1089712477#gid=1089712477';
+
+    // 初始化同步連結
+    const syncLink = document.getElementById('sync-link');
+    if (syncLink && SPREADSHEET_URL) {
+        syncLink.href = SPREADSHEET_URL;
+    }
 
     // Sync Status UI
     const syncStatus = document.getElementById('sync-status');
@@ -24,10 +32,10 @@ document.addEventListener('DOMContentLoaded', () => {
         syncText.textContent = text;
         const icon = syncStatus.querySelector('.material-symbols-outlined');
         if (icon) {
-            switch(state) {
+            switch (state) {
                 case 'syncing': icon.textContent = 'cloud_sync'; break;
                 case 'success': icon.textContent = 'cloud_done'; break;
-                case 'error':   icon.textContent = 'cloud_off'; break;
+                case 'error': icon.textContent = 'cloud_off'; break;
             }
         }
     };
@@ -58,7 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // UI Elements for extension dates
     const projectStatusSelect = document.getElementById('project-status');
     const extendedDateGroup = document.getElementById('extended-date-group');
-    
+
     // Modal Elements
     const updateModal = document.getElementById('update-modal');
     const updateForm = document.getElementById('update-form');
@@ -67,7 +75,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const updateExtendedDateGroup = document.getElementById('update-extended-date-group');
 
     let schedules = [];
-    let isDataLoaded = false; 
+    let isDataLoaded = false;
 
     // Helper for date formatting
     const formatDateHelper = (dateStr) => {
@@ -84,59 +92,69 @@ document.addEventListener('DOMContentLoaded', () => {
     const loadSchedules = async () => {
         const overlay = document.getElementById('loading-overlay');
         updateSyncStatus('syncing', '從雲端載入中...');
-        
+
         const cacheBuster = `&t=${Date.now()}`;
         const finalUrl = API_URL.includes('?') ? (API_URL + cacheBuster) : (API_URL + '?t=' + Date.now());
 
         console.log('Fetching from cloud:', finalUrl);
-        
+
         try {
-            const response = await fetch(finalUrl, { 
+            const response = await fetch(finalUrl, {
                 method: 'GET',
                 mode: 'cors',
                 cache: 'no-cache',
                 redirect: 'follow'
             });
-            
+
             if (response.ok) {
                 let data = await response.json();
-                console.log('Data before scrub:', JSON.stringify(data[0])); // 檢查第一筆的格式
-                
+                console.log('Raw Cloud Data:', data);
+
+                let incomingSchedules = [];
                 if (Array.isArray(data)) {
-                    schedules = data.map(item => {
-                        const sanitized = {
-                            ...item,
-                            id: item.id || Date.now().toString() + Math.random().toString(36).substr(2, 5),
-                            startDate: formatDateHelper(item.startDate),
-                            endDate: formatDateHelper(item.endDate),
-                            extendedDate: item.extendedDate ? formatDateHelper(item.extendedDate) : null
-                        };
-                        return sanitized;
-                    });
-                    
-                    console.log('Data after scrub:', JSON.stringify(schedules[0]));
-                    localStorage.setItem('schedules', JSON.stringify(schedules));
-                    isDataLoaded = true;
-                    updateSyncStatus('success', '已與雲端同步');
+                    // Backward compatibility: data is just schedules array
+                    incomingSchedules = data;
+                } else if (data.schedules) {
+                    // New format: { schedules: [], personnel: [] }
+                    incomingSchedules = data.schedules;
+                    personnelList = data.personnel || [];
                 }
+
+                schedules = incomingSchedules.map(item => {
+                    const sanitized = {
+                        ...item,
+                        id: item.id || Date.now().toString() + Math.random().toString(36).substr(2, 5),
+                        startDate: formatDateHelper(item.startDate),
+                        endDate: formatDateHelper(item.endDate),
+                        extendedDate: item.extendedDate ? formatDateHelper(item.extendedDate) : null
+                    };
+                    return sanitized;
+                });
+
+                localStorage.setItem('schedules', JSON.stringify(schedules));
+                localStorage.setItem('personnelList', JSON.stringify(personnelList));
+                isDataLoaded = true;
+                updateSyncStatus('success', '已與雲端同步');
             } else {
                 throw new Error(`Server responded with ${response.status}`);
             }
         } catch (err) {
             console.error('Cloud load failed:', err);
             schedules = JSON.parse(localStorage.getItem('schedules')) || [];
+            personnelList = JSON.parse(localStorage.getItem('personnelList')) || [];
             isDataLoaded = true;
             updateSyncStatus('error', '離線模式 (載入失敗)');
         }
-        
+
         if (overlay) {
             overlay.style.opacity = '0';
             setTimeout(() => {
                 overlay.style.display = 'none';
             }, 500);
         }
-        
+
         renderSchedules();
+        renderPersonnelUI();
     };
 
     const saveSchedules = async () => {
@@ -146,22 +164,29 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // 整理傳送結構
+        const payload = {
+            schedules: schedules,
+            personnel: personnelList
+        };
+
         // 存到本地
         localStorage.setItem('schedules', JSON.stringify(schedules));
-        
+        localStorage.setItem('personnelList', JSON.stringify(personnelList));
+
         if (window.pywebview && window.pywebview.api) {
-            window.pywebview.api.save_data(JSON.stringify(schedules));
+            window.pywebview.api.save_data(JSON.stringify(payload));
         }
 
         updateSyncStatus('syncing', '同步到雲端...');
         try {
             const response = await fetch(API_URL, {
                 method: 'POST',
-                mode: 'no-cors', 
+                mode: 'no-cors',
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify(schedules)
+                body: JSON.stringify(payload)
             });
-            
+
             setTimeout(() => {
                 updateSyncStatus('success', '已同步至雲端');
             }, 1000);
@@ -173,6 +198,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const saveAndRender = () => {
         renderSchedules();
+        renderPersonnelUI();
         saveSchedules();
     };
 
@@ -208,12 +234,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const getStatusTheme = (schedule) => {
         if (schedule.status === 'completed') return 'completed';
         if (schedule.status === 'cancelled') return 'cancelled';
-        
+
         let targetDate = schedule.endDate;
         if (schedule.status === 'extended' && schedule.extendedDate) {
             targetDate = schedule.extendedDate;
         }
-        
+
         const daysLeft = calculateDaysLeft(targetDate);
         if (daysLeft < 0) return 'danger';
         if (daysLeft <= warningDays) return 'warning';
@@ -221,7 +247,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const getStatusText = (theme) => {
-        switch(theme) {
+        switch (theme) {
             case 'danger': return '已過期';
             case 'warning': return '即將過期';
             case 'ongoing': return '進行中';
@@ -247,7 +273,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const renderSchedules = () => {
         scheduleGrid.innerHTML = '';
-        
+
         let counts = { ongoing: 0, warning: 0, danger: 0, completed: 0, cancelled: 0, all: schedules.length };
 
         if (schedules.length === 0) {
@@ -261,8 +287,8 @@ document.addEventListener('DOMContentLoaded', () => {
             schedules.sort((a, b) => {
                 const getTargetDateA = () => a.status === 'extended' ? a.extendedDate : a.endDate;
                 const getTargetDateB = () => b.status === 'extended' ? b.extendedDate : b.endDate;
-                
-                switch(currentSort) {
+
+                switch (currentSort) {
                     case 'end-asc':
                         return new Date(getTargetDateA()) - new Date(getTargetDateB());
                     case 'end-desc':
@@ -289,7 +315,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Filter out non-matching 
                 if (currentFilter !== 'all' && currentFilter !== theme) {
-                    return; 
+                    return;
                 }
 
                 const cardStyle = `card-${theme}`;
@@ -361,10 +387,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.filter-badge').forEach(badge => {
         badge.addEventListener('click', (e) => {
             document.querySelectorAll('.filter-badge').forEach(b => b.classList.remove('active'));
-            
+
             const clickedBadge = e.currentTarget;
             clickedBadge.classList.add('active');
-            
+
             currentFilter = clickedBadge.getAttribute('data-filter');
             renderSchedules();
         });
@@ -390,7 +416,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const now = new Date();
-        const saveTime = `${now.getFullYear()}/${(now.getMonth()+1).toString().padStart(2, '0')}/${now.getDate().toString().padStart(2, '0')} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+        const saveTime = `${now.getFullYear()}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getDate().toString().padStart(2, '0')} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
 
         const newSchedule = {
             id: Date.now().toString(),
@@ -423,7 +449,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('update-id').value = schedule.id;
         updateStatusSelect.value = schedule.status || 'started';
         document.getElementById('update-extended-date').value = schedule.extendedDate || '';
-        
+
         toggleExtendedDateGroup(updateStatusSelect, updateExtendedDateGroup);
         updateModal.style.display = 'flex';
     };
@@ -486,7 +512,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         schedules = importedData;
                     } else {
                         // Regenerate IDs to avoid conflicts
-                        const reMappedData = importedData.map(item => ({...item, id: Date.now().toString() + Math.random().toString(36).substr(2, 5)}));
+                        const reMappedData = importedData.map(item => ({ ...item, id: Date.now().toString() + Math.random().toString(36).substr(2, 5) }));
                         schedules = [...schedules, ...reMappedData];
                     }
                     saveAndRender();
@@ -499,11 +525,128 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
         reader.readAsText(file);
-        
+
         // Reset so same file can be triggered again
         e.target.value = '';
     });
 
+
+    const renderPersonnelUI = () => {
+        const quickPickContainer = document.getElementById('personnel-quick-pick');
+        const manageContainer = document.getElementById('personnel-list-manage');
+        const personnelInput = document.getElementById('personnel');
+
+        if (!quickPickContainer || !manageContainer) return;
+
+        // 1. Render Quick Pick Badges
+        quickPickContainer.innerHTML = '';
+        if (personnelList.length === 0) {
+            quickPickContainer.innerHTML = '<span style="font-size: 0.8rem; color: var(--text-muted); font-style: italic;">尚未設定人員名單</span>';
+        } else {
+            personnelList.forEach(name => {
+                const badge = document.createElement('span');
+                badge.className = 'personnel-badge';
+                badge.textContent = name;
+
+                // Toggle logic: append or remove name from input
+                badge.addEventListener('click', () => {
+                    let currentNames = personnelInput.value.split(/[、,，\s]+/).map(n => n.trim()).filter(n => n);
+                    if (currentNames.includes(name)) {
+                        currentNames = currentNames.filter(n => n !== name);
+                    } else {
+                        currentNames.push(name);
+                    }
+                    personnelInput.value = currentNames.join('、');
+
+                    // Update badge visual state
+                    badge.classList.toggle('selected');
+                });
+
+                // Set initial selected state based on input value
+                const currentNames = personnelInput.value.split(/[、,，\s]+/).map(n => n.trim());
+                if (currentNames.includes(name)) {
+                    badge.classList.add('selected');
+                }
+
+                quickPickContainer.appendChild(badge);
+            });
+        }
+
+        // 2. Render Management List in Modal
+        manageContainer.innerHTML = '';
+        personnelList.forEach((name, index) => {
+            const item = document.createElement('div');
+            item.className = 'manage-item';
+            item.innerHTML = `
+                <span>${name}</span>
+                <button type="button" class="delete-name-btn" data-index="${index}">
+                    <span class="material-symbols-outlined">delete</span>
+                </button>
+            `;
+            manageContainer.appendChild(item);
+        });
+
+        // Delete Handler
+        manageContainer.querySelectorAll('.delete-name-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const idx = parseInt(e.currentTarget.getAttribute('data-index'));
+                personnelList.splice(idx, 1);
+                renderPersonnelUI();
+            });
+        });
+    };
+
+    // Personnel Modal Events
+    const personnelModal = document.getElementById('personnel-modal');
+    const btnManagePersonnel = document.getElementById('btn-manage-personnel');
+    const btnClosePersonnel = document.getElementById('btn-close-personnel');
+    const btnSavePersonnelClose = document.getElementById('btn-save-personnel-close');
+    const btnAddPersonnel = document.getElementById('btn-add-personnel');
+    const newPersonnelInput = document.getElementById('new-personnel-name');
+
+    btnManagePersonnel.addEventListener('click', () => {
+        renderPersonnelUI();
+        personnelModal.style.display = 'flex';
+    });
+
+    const closePersonnelModal = () => {
+        personnelModal.style.display = 'none';
+        saveAndRender(); // Save to cloud when closing management
+    };
+
+    btnClosePersonnel.addEventListener('click', closePersonnelModal);
+    btnSavePersonnelClose.addEventListener('click', closePersonnelModal);
+
+    btnAddPersonnel.addEventListener('click', () => {
+        const name = newPersonnelInput.value.trim();
+        if (name && !personnelList.includes(name)) {
+            personnelList.push(name);
+            newPersonnelInput.value = '';
+            renderPersonnelUI();
+        } else if (personnelList.includes(name)) {
+            alert('此姓名已在名單中！');
+        }
+    });
+
+    // Also support Enter key for adding personnel
+    newPersonnelInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            btnAddPersonnel.click();
+        }
+    });
+
+    // Sync badge state when typing manually
+    document.getElementById('personnel').addEventListener('input', () => {
+        const currentNames = document.getElementById('personnel').value.split(/[、,，\s]+/).map(n => n.trim());
+        document.querySelectorAll('.personnel-badge').forEach(badge => {
+            if (currentNames.includes(badge.textContent)) {
+                badge.classList.add('selected');
+            } else {
+                badge.classList.remove('selected');
+            }
+        });
+    });
 
     // Initialize Flatpickr for custom date picker UI
     flatpickr('input[type="date"]', {
@@ -527,7 +670,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             }
-        } catch(e) {
+        } catch (e) {
             console.error("Pywebview load error:", e);
         }
     });

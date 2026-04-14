@@ -17,10 +17,12 @@
         <header>
             <div class="header-main">
                 <h1>工程行程追蹤</h1>
-                <div class="nav-sync-status" id="sync-status">
-                    <span class="material-symbols-outlined">cloud_sync</span>
-                    <span id="sync-text">載入中...</span>
-                </div>
+                <a id="sync-link" href="#" target="_blank" style="text-decoration: none;">
+                    <div class="nav-sync-status" id="sync-status">
+                        <span class="material-symbols-outlined">cloud_sync</span>
+                        <span id="sync-text">載入中...</span>
+                    </div>
+                </a>
             </div>
             <p>輕鬆掌握您的專案進度，絕不漏接重要日程</p>
         </header>
@@ -34,8 +36,14 @@
                         <input type="text" id="project-name" required placeholder="例如：新竹廠區 A 棟機電工程...">
                     </div>
                     <div class="form-group">
-                        <label for="personnel">施工人員名單</label>
-                        <input type="text" id="personnel" placeholder="例如：王小明、林志明...">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                            <label for="personnel">施工人員名單</label>
+                            <button type="button" id="btn-manage-personnel" class="text-btn" style="font-size: 0.8rem; color: var(--primary-color); background: none; border: none; cursor: pointer; padding: 0 0 0.5rem 0; font-weight: 600;">管理名單</button>
+                        </div>
+                        <input type="text" id="personnel" placeholder="點擊下方姓名或手動輸入...">
+                        <div id="personnel-quick-pick" class="quick-pick-container">
+                             <!-- 快速點選標籤將在此生成 -->
+                        </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
@@ -125,6 +133,34 @@
                     <button type="submit" class="btn-primary">確認更新</button>
                 </div>
             </form>
+        </div>
+    </div>
+    <!-- Personnel Management Modal -->
+    <div id="personnel-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content glass-panel" style="max-width: 500px;">
+            <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h2 style="margin: 0;">施工人員名單管理</h2>
+                <button type="button" id="btn-close-personnel" class="text-btn" style="color: var(--text-muted);">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            
+            <div class="form-group" style="background: rgba(0,0,0,0.02); padding: 1rem; border-radius: 12px; margin-bottom: 1.5rem;">
+                <label>新增人員名稱</label>
+                <div style="display: flex; gap: 0.5rem;">
+                    <input type="text" id="new-personnel-name" placeholder="例如：張三..." style="flex: 1;">
+                    <button type="button" id="btn-add-personnel" class="btn-primary" style="margin: 0; width: auto; padding: 0.5rem 1.2rem;">新增</button>
+                </div>
+            </div>
+
+            <label style="display: block; margin-bottom: 0.8rem;">現有人員名單 (點擊刪除圖示移除)</label>
+            <div class="personnel-list-manage" id="personnel-list-manage">
+                <!-- 名單將在此動態生成 -->
+            </div>
+
+            <div class="modal-actions" style="margin-top: 2rem;">
+                <button type="button" class="btn-primary" id="btn-save-personnel-close">確認並關閉</button>
+            </div>
         </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
