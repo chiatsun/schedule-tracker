@@ -429,11 +429,12 @@ document.addEventListener('DOMContentLoaded', () => {
             extendedDate: status === 'extended' ? extendedDate : null
         };
 
-        schedules.push(newSchedule);
-        saveAndRender();
+        schedules.unshift(newSchedule);
         scheduleForm.reset();
+        updateBadgeSelection(); // 確保重設時同步清除藍色標籤視覺效果
         extendedDateGroup.style.display = 'none';
         projectStatusSelect.value = 'started';
+        saveAndRender();
     };
 
     const deleteSchedule = (id) => {
@@ -571,6 +572,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 quickPickContainer.appendChild(badge);
             });
         }
+        
+        // 確保視圖狀態與輸入框一致
+        updateBadgeSelection();
 
         // 2. Render Management List in Modal
         manageContainer.innerHTML = '';
@@ -638,7 +642,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Sync badge state when typing manually
     document.getElementById('personnel').addEventListener('input', () => {
-        const currentNames = document.getElementById('personnel').value.split(/[、,，\s]+/).map(n => n.trim());
+        updateBadgeSelection();
+    });
+
+    // Update selected visual state for badges
+    const updateBadgeSelection = () => {
+        const personnelInput = document.getElementById('personnel');
+        if (!personnelInput) return;
+        
+        const currentNames = personnelInput.value.split(/[、,，\s]+/).map(n => n.trim()).filter(n => n);
         document.querySelectorAll('.personnel-badge').forEach(badge => {
             if (currentNames.includes(badge.textContent)) {
                 badge.classList.add('selected');
@@ -646,7 +658,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 badge.classList.remove('selected');
             }
         });
-    });
+    };
 
     // Initialize Flatpickr for custom date picker UI
     flatpickr('input[type="date"]', {
